@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Consigna from './components/consigna'
 import Simulacion from './components/simulacion'
+import { Play, Text } from 'lucide-react'
 
 const VISTAS = { HOME: 'home', CONSIGNA: 'consigna', SIMULACION: 'simulacion' }
 
@@ -16,7 +17,16 @@ function App() {
             ← Volver
           </button>
           <span className="text-sm text-base-content/50 ml-2">
-            {vista === VISTAS.CONSIGNA ? '📋 Consigna' : '▶ Simulación'}
+            {vista === VISTAS.CONSIGNA ? (
+              <span className="inline-flex items-center gap-1">
+                <Text size={14} /> Consigna
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+    <Play size={14} /> Simulación
+  </span>
+)}
+
           </span>
         </div>
         {vista === VISTAS.CONSIGNA && <Consigna />}
@@ -43,13 +53,13 @@ function App() {
               className="btn btn-outline btn-primary btn-lg gap-2"
               onClick={() => setVista(VISTAS.CONSIGNA)}
             >
-              📋 Ver Consigna
+              <Text /> Ver Consigna
             </button>
             <button
               className="btn btn-primary btn-lg gap-2"
               onClick={() => setVista(VISTAS.SIMULACION)}
             >
-              ▶ Ir a Simulación
+              <Play /> Ir a Simulación
             </button>
           </div>
         </div>

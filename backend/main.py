@@ -4,8 +4,6 @@ from routes import simulacion
 
 app = FastAPI(title="TP Simulación - Fábrica de Manufacturas", version="1.0.0")
 
-# ── CORS ───────────────────────────────────────────────────────────────────────
-# Permite que el frontend (Vite en :5173) se comunique con el backend (:8000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -14,7 +12,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(simulacion.router, prefix="/api")
 
 

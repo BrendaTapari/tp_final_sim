@@ -1,25 +1,24 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from typing import Any
 from services import simulador
 from services import generadorNumeros
+import random
 
 router = APIRouter()
 
-
-# ── Modelos ────────────────────────────────────────────────────────────────────
-
 class ParametrosSimulacion(BaseModel):
     replicaciones: int = 10
-    tiempo_simulacion: float = 480   # minutos
-    tasa_llegada: float = 20         # minutos entre llegadas (media exponencial)
+    tiempo_simulacion: float = 480  
     semilla: int = 42
+    tasa_llegada: float = 20
 
 
 class ResultadoGrupo(BaseModel):
     id: int
     maquinas: int
-    utilizacion: float        # porcentaje 0-100
-    espera_promedio: float    # minutos
+    utilizacion: float        
+    espera_promedio: float   
     cola_promedio: float
 
 
@@ -27,7 +26,8 @@ class ResultadoSimulacion(BaseModel):
     throughput: float
     tiempo_total: float
     grupos: list[ResultadoGrupo]
-    comparativa: list[dict]
+    comparativa: list[Any]
+    log_eventos: list[Any] = []  
 
 
 class ParametrosGenerador(BaseModel):
@@ -42,7 +42,6 @@ class ParametrosGenerador(BaseModel):
 
 @router.post("/simular", response_model=ResultadoSimulacion)
 def simular(params: ParametrosSimulacion):
-    """Ejecuta la simulación con los parámetros dados."""
     resultado = simulador.ejecutar(params)
     return resultado
 
@@ -93,3 +92,10 @@ def generar_parametros(cantidad: int):
     parámetros LCG válidos automáticamente.
     """
     return generadorNumeros.generar_parametros_apartir_de_cantidad(cantidad)
+
+@router.get("/semilla-aleatoria")
+def semilla_aleatoria():
+    """
+    Genera una semilla aleatoria apropiada para usar en el generador.
+    """
+    return {"semilla": random.randint(1, 99999)}

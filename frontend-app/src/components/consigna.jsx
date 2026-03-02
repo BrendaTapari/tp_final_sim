@@ -245,7 +245,7 @@ export default function Consigna() {
           </p>
           <p className="text-primary-content/70 text-sm mt-1">
             → Simular el sistema base, luego simular añadiendo +1 máquina a cada grupo por separado
-            y comparar métricas: tiempo de espera, throughput y utilización.
+            y comparar métricas: tiempo de espera, rendimiento y utilización.
           </p>
         </div>
       </div>

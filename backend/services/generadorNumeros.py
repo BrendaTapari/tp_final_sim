@@ -11,7 +11,7 @@ def generar_numeros_congurencia_lineal(semilla, cantidad, modulo, multiplicador,
 
 
 def _es_potencia_de_2(n):
-    """Retorna True si n es de la forma 2^g con g entero positivo (2, 4, 8, 16, ...)."""
+    """Retorna True si n es de la forma 2^g con g entero positivo."""
     return n >= 2 and (n & (n - 1)) == 0
 
 
@@ -32,7 +32,7 @@ def verificador_parametros_generador(semilla, cantidad, modulo, multiplicador, i
     Condiciones verificadas:
       1. Todos los valores son enteros >= 0.
       2. El módulo es de la forma 2^g  (g entero positivo).
-      3. El multiplicador es de la forma 1 + 4k  (k entero positivo, es decir > 1).
+      3. El multiplicador es de la forma 1 + 4k  (k entero positivo).
       4. El incremento es relativamente primo al módulo  (mcd = 1).
 
     """
@@ -59,7 +59,7 @@ def verificador_parametros_generador(semilla, cantidad, modulo, multiplicador, i
     if not _es_potencia_de_2(modulo):
         raise ValueError(
             f"El módulo debe ser de la forma 2^g con g entero positivo "
-            f"(ej: 2, 4, 8, 16, 32, ...). Se recibió: {modulo}"
+            f"Se recibió: {modulo}"
         )
 
     g = _encontrar_g(modulo)

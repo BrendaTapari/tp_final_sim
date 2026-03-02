@@ -1,12 +1,7 @@
-/**
- * Cliente API para el backend de simulación.
- * Todas las llamadas pasan por el proxy de Vite (/api → http://localhost:8000/api).
- */
 
 const BASE = '/api'
 
 /**
- * Verifica que el backend esté activo.
  * @returns {{ status: string, mensaje: string }}
  */
 export async function healthCheck() {
@@ -66,7 +61,7 @@ export async function generar(params) {
 }
 
 /**
- * Verifica que los parámetros del LCG sean válidos (Hull-Dobell).
+ * Verifica que los parámetros del LCG sean válidos.
  * @param {{ semilla, cantidad, modulo, multiplicador, incremento }} params
  * @returns {{ valido, modulo, multiplicador, incremento }}
  */
@@ -97,3 +92,15 @@ export async function generarParametros(cantidad) {
   return res.json()
 }
 
+/**
+ * Obtiene una semilla aleatoria apropiada desde el backend
+ * @returns {Promise<{ semilla: number }>}
+ */
+export async function generarSemilla() {
+  const res = await fetch(`${BASE}/semilla-aleatoria`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Error ${res.status}`)
+  }
+  return res.json()
+}
