@@ -266,6 +266,24 @@ export default function Simulacion() {
 // ── Tabla de Eventos
 const GRUPOS_IDS = [1, 2, 3, 4, 5]
 
+// Badges visuales para estado de trabajo y de máquina
+function badgeTrabajo(estado) {
+  if (!estado) return <span className="opacity-20 text-xs">—</span>
+  if (estado === 'Completado')
+    return <span className="badge badge-accent badge-xs whitespace-nowrap">✓ Completado</span>
+  if (estado === 'Esperando atención')
+    return <span className="badge badge-warning badge-xs whitespace-nowrap">⏳ Esperando</span>
+  // En grupo N
+  return <span className="badge badge-success badge-xs whitespace-nowrap">{estado}</span>
+}
+
+function badgeMaquina(estado) {
+  if (!estado) return <span className="opacity-20 text-xs">—</span>
+  if (estado === 'Ocupada')
+    return <span className="badge badge-error badge-xs">Ocupada</span>
+  return <span className="badge badge-success badge-xs">Libre</span>
+}
+
 function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoExtra = null }) {
   const [filtro, setFiltro] = useState('')
 
@@ -281,6 +299,32 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
     )
   }
 
+  // ── Calcular máximo trabajo_id para columnas dinámicas
+  const maxTrabajo = eventos.reduce((mx, e) => {
+    if (e.estado_trabajos) {
+      const ids = Object.keys(e.estado_trabajos).map(Number)
+      if (ids.length > 0) mx = Math.max(mx, ...ids)
+    }
+    return mx
+  }, 0)
+  const trabajoIds = Array.from({ length: maxTrabajo }, (_, i) => i + 1)
+
+  // ── Columnas de máquinas por grupo: {g: count}
+  const maquinasPorGrupo = {}
+  for (const ev of eventos) {
+    if (ev.estado_maquinas) {
+      for (const [gStr, arr] of Object.entries(ev.estado_maquinas)) {
+        const g = Number(gStr)
+        if (!maquinasPorGrupo[g]) maquinasPorGrupo[g] = arr.length
+      }
+      break // basta con el primer evento que lo tenga
+    }
+  }
+  // Lista ordenada de grupos con sus slots: [{g, slots}]
+  const gruposConMaq = Object.entries(maquinasPorGrupo)
+    .map(([g, slots]) => ({ g: Number(g), slots }))
+    .sort((a, b) => a.g - b.g)
+
   const filas = filtro
     ? eventos.filter(e =>
         (e.evento ?? '').toLowerCase().includes(filtro.toLowerCase()) ||
@@ -291,7 +335,6 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
       )
     : eventos
 
-  
   const getGrupoSnap = (ev) => {
     const snap = {}
     if (ev.estado_grupos) {
@@ -419,6 +462,26 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
                 </th>
               ))}
 
+              {/* ── Estado individual de máquinas por grupo */}
+              {gruposConMaq.map(({ g, slots }) =>
+                Array.from({ length: slots }, (_, i) => (
+                  <th key={`estmaq-g${g}-m${i+1}`}
+                    className="whitespace-nowrap text-center cursor-help text-info"
+                    title={`Estado de la máquina ${i+1} del Grupo ${g}`}>
+                    G{g}-M{i+1}
+                  </th>
+                ))
+              )}
+
+              {/* ── Estado de cada trabajo */}
+              {trabajoIds.map(tid => (
+                <th key={`tj${tid}`}
+                  className="whitespace-nowrap text-center cursor-help text-secondary"
+                  title={`Estado del Trabajo ${tid} en este instante`}>
+                  Trabajo {tid}
+                </th>
+              ))}
+
               <th>Paso</th>
               <th>Secuencia</th>
 
@@ -431,6 +494,20 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
               <th colSpan={5} className="text-center border-l border-base-300">← Máq. libres por grupo →</th>
               <th colSpan={5} className="text-center border-l border-base-300">← Cola por grupo →</th>
               <th colSpan={5} className="text-center border-l border-base-300 text-success">← T. Fin Servicio →</th>
+              {gruposConMaq.length > 0 && (
+                <th
+                  colSpan={gruposConMaq.reduce((s, x) => s + x.slots, 0)}
+                  className="text-center border-l border-info text-info">
+                  ← Estado máquinas →
+                </th>
+              )}
+              {trabajoIds.length > 0 && (
+                <th
+                  colSpan={trabajoIds.length}
+                  className="text-center border-l border-secondary text-secondary">
+                  ← Estado trabajos →
+                </th>
+              )}
               <th colSpan={3} />
             </tr>
           </thead>
@@ -533,6 +610,25 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
                       </td>
                     )
                   })}
+
+                  {/* ── Estado de cada máquina individual por grupo */}
+                  {gruposConMaq.map(({ g, slots }) =>
+                    Array.from({ length: slots }, (_, i) => {
+                      const estadoArr = ev.estado_maquinas?.[g]
+                      return (
+                        <td key={`estmaq-g${g}-m${i+1}`} className="text-center whitespace-nowrap">
+                          {estadoArr ? badgeMaquina(estadoArr[i]) : <span className="opacity-20 text-xs">—</span>}
+                        </td>
+                      )
+                    })
+                  )}
+
+                  {/* ── Estado de cada trabajo */}
+                  {trabajoIds.map(tid => (
+                    <td key={`tj${tid}`} className="text-center whitespace-nowrap">
+                      {badgeTrabajo(ev.estado_trabajos?.[tid])}
+                    </td>
+                  ))}
 
                   <td className="font-mono text-xs text-center">
                     {ev.paso != null && ev.total_pasos != null

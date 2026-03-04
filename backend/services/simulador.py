@@ -1,6 +1,7 @@
 
 import heapq
-from services import generadorNumeros, distribuciones, probabilidades
+from services import generadorNumeros, distribuciones, probabilidades, estadisticas
+from services.estados import EstadoTrabajo, EstadoMaquina
 
 GRUPOS = [
     {"id": 1, "maquinas": 3},
@@ -27,9 +28,7 @@ def _generar_pool(semilla_base, cantidad, offset=0):
 
 def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registrar_log=False):
     """
-    Una réplica con colas por GRUPO.
-    - Un solo evento por llegada (merged con lo que ocurre inmediatamente).
-    - Cada entrada del log incluye 'estado_grupos' con el estado de los 5 grupos.
+    Simula una corrida.
     """
     cursor      = [0]
     log         = []
@@ -40,11 +39,9 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
             raise RuntimeError("Pool agotado.")
         v = pool[cursor[0]]; cursor[0] += 1; return v
 
-    # ── Estado por grupo ────────────────────────────────────────────────────────
-    maq_libres = list(n_maquinas)      # maq_libres[g] = máquinas libres en grupo g
+    maq_libres = list(n_maquinas)      
     colas      = [[] for _ in range(N)]
 
-    # Estadísticas
     t_ocupado   = [0.0] * N
     suma_espera = [0.0] * N
     n_atendidos = [0]   * N
@@ -52,13 +49,33 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
     t_ultimo_ev = [0.0] * N
     completados = [0]
 
+    estado_trabajos = {}
+
+    estado_maquinas = {
+        g: [EstadoMaquina.LIBRE] * n_maquinas[g]
+        for g in range(N)
+    }
+
+    def _ocupar_maquina(g):
+        """Marca la primera máquina LIBRE del grupo como OCUPADA."""
+        for i, est in enumerate(estado_maquinas[g]):
+            if est == EstadoMaquina.LIBRE:
+                estado_maquinas[g][i] = EstadoMaquina.OCUPADA
+                return
+
+    def _liberar_maquina(g):
+        """Marca la primera máquina OCUPADA del grupo como LIBRE."""
+        for i, est in enumerate(estado_maquinas[g]):
+            if est == EstadoMaquina.OCUPADA:
+                estado_maquinas[g][i] = EstadoMaquina.LIBRE
+                return
+
     def actualizar_area(g, t):
         dt = t - t_ultimo_ev[g]
         area_cola[g] += len(colas[g]) * dt
         t_ultimo_ev[g] = t
 
     def snapshot_grupos():
-        """Captura el estado de todos los grupos en este instante."""
         tiempos_fin = {g: [] for g in range(N)}
         for evt in eventos:
             if evt[1] == 1:
@@ -83,16 +100,7 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
              tipo_manufactura=None, paso=None, total_pasos=None,
              secuencia=None,
              prox_llegada_rnd=None, prox_llegada_t_calc=None, prox_llegada_reloj=None):
-        """
-        evento       → texto descriptivo corto (columna principal de la tabla)
-        descripcion  → texto detallado (columna al final)
-        estado_grupos → lista [{"g":1, "maq_libres":3, "cola":0}, ...] para los 5 grupos
-        random_tipo  → random que eligió el tipo (solo Llegada)
-        random_usado → random para calcular tiempo de servicio
-        prox_llegada_rnd    → random usado para calcular la próxima llegada (solo Llegada)
-        prox_llegada_t_calc → tiempo entre llegadas calculado con distribución (min)
-        prox_llegada_reloj  → hora del reloj en que llegará el próximo trabajo
-        """
+
         if registrar_log:
             log.append({
                 "reloj":            round(reloj, 4),
@@ -114,10 +122,15 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                 "prox_llegada_reloj":  round(prox_llegada_reloj,  4) if prox_llegada_reloj  is not None else None,
                 # Estado de todos los grupos en este momento
                 "estado_grupos":    snapshot_grupos(),
+                # Estado por trabajo: {id → 'En grupo N' | 'Esperando atención' | 'Completado'}
+                "estado_trabajos":  dict(estado_trabajos),
+                # Estado por máquina individual: {g_idx+1 → ['Libre','Ocupada',...]}
+                "estado_maquinas":  {
+                    g + 1: list(estado_maquinas[g])
+                    for g in range(N)
+                },
             })
 
-    # ── Asignar a máquina o encolar ─────────────────────────────────────────────
-    # Devuelve: ('inicio', r_serv, ts) si inicia servicio, ('cola', None, None) si no
     def _intentar_asignar(g, trabajo, t):
         """Intenta darle servicio. Si hay máquina libre, la ocupa y programa fin.
         NO registra log (lo hace el llamador)."""
@@ -132,10 +145,15 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
             t_pos = trabajo["tipo"]["tiempos"][paso]
             t_ocupado[g] += ts
             heapq.heappush(eventos, (t + ts, 1, {"g": g, "trabajo": trabajo}))
+            # Actualizar estados
+            _ocupar_maquina(g)
+            estado_trabajos[trabajo["id"]] = EstadoTrabajo.en_grupo(g + 1)
             return "inicio", r_serv, ts, t_pos
         else:
             trabajo["t_cola"] = t
             colas[g].append(trabajo)
+            # El trabajo queda esperando en cola
+            estado_trabajos[trabajo["id"]] = EstadoTrabajo.ESPERANDO_ATENCION
             return "cola", None, None, None
 
     eventos = []
@@ -154,7 +172,7 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
         if t > tiempo_sim_min:
             break
 
-        # ── LLEGADA ──────────────────────────────────────────────────────────────
+        # LLEGADA
         if tipo == 0:
             n_trabajo[0] += 1
             tid = n_trabajo[0]
@@ -182,11 +200,9 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
             sec_str = "→G".join(str(s) for s in tipo_mfg["secuencia"])
             trabajo = {"tipo": tipo_mfg, "paso": 0, "t_llegada": t, "id": tid, "tipo_nombre": tipo_nombre}
 
-            # Intentar asignar (sin log) y combinar con la llegada en UNA sola fila
             res, r_serv, ts, t_pos = _intentar_asignar(g0, trabajo, t)
 
             if res == "inicio":
-                # ── Llegada + inicio inmediato: UN SOLO EVENTO ──
                 _log(t,
                      evento=f"Llegada T#{tid}",
                      descripcion=(
@@ -206,7 +222,6 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                      paso=1,
                      prox_llegada_rnd=r_prox, prox_llegada_t_calc=t_entre, prox_llegada_reloj=t_sig)
             else:
-                # ── Llegada + espera: UN SOLO EVENTO ──
                 _log(t,
                      evento=f"Llegada T#{tid} → espera",
                      descripcion=(
@@ -223,16 +238,16 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                      secuencia=tipo_mfg["secuencia"],
                      paso=1,
                      prox_llegada_rnd=r_prox, prox_llegada_t_calc=t_entre, prox_llegada_reloj=t_sig)
-
-        # ── FIN DE SERVICIO ────────────────────────────────────────────────────
+        # Fin servicio
         elif tipo == 1:
             g       = datos["g"]
             trabajo = datos["trabajo"]
 
             actualizar_area(g, t)
             maq_libres[g] += 1
+            _liberar_maquina(g)
 
-            # ¿Hay trabajos esperando en la cola de este grupo?
+            # Si hay trabajo esperando en cola → sacarlo y asignarle servicio
             if colas[g]:
                 sig = colas[g].pop(0)
                 actualizar_area(g, t)
@@ -241,43 +256,30 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                 n_atendidos[g] += 1
                 maq_libres[g]  -= 1
 
-                # Calcular servicio del que sale de cola
-                r_serv    = rand()
-                media_min = sig["tipo"]["tiempos"][sig["paso"]] * HS_A_MIN
-                ts = distribuciones.generar_numeros_exponenciales([r_serv], media_min)[0]
-                t_pos = sig["tipo"]["tiempos"][sig["paso"]]
-                t_ocupado[g] += ts
-                heapq.heappush(eventos, (t + ts, 1, {"g": g, "trabajo": sig}))
+                r_serv_cola   = rand()
+                media_min_cola = sig["tipo"]["tiempos"][sig["paso"]] * HS_A_MIN
+                ts_cola = distribuciones.generar_numeros_exponenciales([r_serv_cola], media_min_cola)[0]
+                t_pos_cola = sig["tipo"]["tiempos"][sig["paso"]]
+                t_ocupado[g] += ts_cola
+                heapq.heappush(eventos, (t + ts_cola, 1, {"g": g, "trabajo": sig}))
 
-                # Fin + Sale de cola + nuevo Inicio: UN SOLO EVENTO
+                # Fila propia para T#sig (job diferente, tiene sentido separado)
                 _log(t,
-                     evento=f"T#{trabajo['id']} termina | T#{sig['id']} sale cola",
+                     evento=f"T#{sig['id']} sale cola → inicia en G{g+1}",
                      descripcion=(
-                         f"T#{trabajo['id']} termina en G{g+1}. "
-                         f"T#{sig['id']} estaba esperando (esperó {round(espera,2)}min) → entra en servicio inmediatamente. "
+                         f"T#{trabajo['id']} liberó G{g+1}. "
+                         f"T#{sig['id']} estaba en cola (esperó {round(espera,2)}min) → entra en servicio. "
                          f"Paso {sig['paso']+1}/{len(sig['tipo']['secuencia'])}. "
-                         f"Sorteado={round(ts,2)}min. Finaliza en t={round(t+ts,2)}."
+                         f"Media={t_pos_cola}hs={round(t_pos_cola*HS_A_MIN,1)}min. "
+                         f"Sorteado={round(ts_cola,2)}min. Finaliza en t={round(t+ts_cola,2)}."
                      ),
-                     random_usado=r_serv, tiempo_calculado=ts, tiempo_fin=t+ts,
-                     trabajo_id=trabajo["id"], grupo=g+1,
-                     tipo_manufactura=trabajo.get("tipo_nombre"),
-                     paso=trabajo["paso"]+1, total_pasos=len(trabajo["tipo"]["secuencia"]),
-                     secuencia=trabajo["tipo"]["secuencia"])
-            else:
-                # Fin simple (sin cola)
-                _log(t,
-                     evento=f"T#{trabajo['id']} termina",
-                     descripcion=(
-                         f"T#{trabajo['id']} ({trabajo.get('tipo_nombre','?')}) termina servicio en G{g+1}. "
-                         f"Paso {trabajo['paso']+1}/{len(trabajo['tipo']['secuencia'])}. "
-                         f"G{g+1} tiene ahora {maq_libres[g]} máq. libre(s). Cola: {len(colas[g])}."
-                     ),
-                     trabajo_id=trabajo["id"], grupo=g+1,
-                     tipo_manufactura=trabajo.get("tipo_nombre"),
-                     paso=trabajo["paso"]+1, total_pasos=len(trabajo["tipo"]["secuencia"]),
-                     secuencia=trabajo["tipo"]["secuencia"])
+                     random_usado=r_serv_cola, tiempo_calculado=ts_cola, tiempo_fin=t+ts_cola,
+                     trabajo_id=sig["id"], grupo=g+1,
+                     tipo_manufactura=sig.get("tipo_nombre"),
+                     paso=sig["paso"]+1, total_pasos=len(sig["tipo"]["secuencia"]),
+                     secuencia=sig["tipo"]["secuencia"])
 
-            # Avanzar trabajo al siguiente grupo
+            # Avanzar T#trabajo → UNA SOLA fila (sin el "termina" intermedio)
             secuencia = trabajo["tipo"]["secuencia"]
             paso_sig  = trabajo["paso"] + 1
             if paso_sig < len(secuencia):
@@ -289,8 +291,8 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                     _log(t,
                          evento=f"T#{trabajo['id']} avanza → inicia (paso {paso_sig+1})",
                          descripcion=(
-                             f"T#{trabajo['id']} avanza al siguiente grupo G{g_sig+1}. "
-                             f"Paso {paso_sig+1}/{len(secuencia)}. Máquina libre → inicia. "
+                             f"T#{trabajo['id']} termina en G{g+1}. "
+                             f"Avanza a G{g_sig+1} (paso {paso_sig+1}/{len(secuencia)}). Máquina libre → inicia. "
                              f"Media={t_pos2}hs={round(t_pos2*HS_A_MIN,1)}min. "
                              f"Sorteado={round(ts2,2)}min. Finaliza en t={round(t+ts2,2)}."
                          ),
@@ -303,7 +305,8 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                     _log(t,
                          evento=f"T#{trabajo['id']} avanza → espera (paso {paso_sig+1})",
                          descripcion=(
-                             f"T#{trabajo['id']} avanza al siguiente grupo G{g_sig+1}. "
+                             f"T#{trabajo['id']} termina en G{g+1}. "
+                             f"Avanza a G{g_sig+1} (paso {paso_sig+1}/{len(secuencia)}). "
                              f"Sin máquinas libres → pasa a cola (cola={len(colas[g_sig])})."
                          ),
                          trabajo_id=trabajo["id"], grupo=g_sig+1,
@@ -313,53 +316,36 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
             else:
                 completados[0] += 1
                 dur_total = round(t - trabajo["t_llegada"], 2)
+                sec_list  = trabajo["tipo"]["secuencia"]
+                # El trabajo completó su ciclo
+                estado_trabajos[trabajo["id"]] = EstadoTrabajo.COMPLETADO
                 _log(t,
                      evento=f"T#{trabajo['id']} COMPLETADO",
                      descripcion=(
                          f"T#{trabajo['id']} ({trabajo.get('tipo_nombre','?')}) completó todos sus pasos. "
-                         f"Recorrido: G{sec_str if 'sec_str' in dir() else '?'}. "
+                         f"Terminó en G{g+1}. Recorrido: G{'→G'.join(str(s) for s in sec_list)}. "
                          f"Tiempo total en sistema: {dur_total} min."
                      ),
                      trabajo_id=trabajo["id"],
                      tipo_manufactura=trabajo.get("tipo_nombre"),
-                     grupo=trabajo["tipo"]["secuencia"][-1],
-                     total_pasos=len(trabajo["tipo"]["secuencia"]),
-                     secuencia=trabajo["tipo"]["secuencia"])
+                     grupo=sec_list[-1],
+                     total_pasos=len(sec_list),
+                     secuencia=sec_list)
 
-    # ── Estadísticas por grupo
-    grupos_stats = []
-    for g in range(N):
-        cap = n_maquinas[g] * tiempo_sim_min
-        grupos_stats.append({
-            "id":              g + 1,
-            "maquinas":        n_maquinas[g],
-            "utilizacion":     round(min((t_ocupado[g] / cap * 100) if cap > 0 else 0, 100.0), 2),
-            "espera_promedio": round((suma_espera[g] / n_atendidos[g]) if n_atendidos[g] > 0 else 0, 2),
-            "cola_promedio":   round((area_cola[g] / tiempo_sim_min) if tiempo_sim_min > 0 else 0, 3),
-        })
+    grupos_stats = estadisticas.calcular_stats_grupos(
+        n_maquinas, tiempo_sim_min,
+        t_ocupado, suma_espera, n_atendidos, area_cola
+    )
+    throughput = estadisticas.calcular_throughput(completados[0], tiempo_sim_min)
 
     return {
         "grupos":     grupos_stats,
-        "throughput": round(completados[0] / (tiempo_sim_min / 60.0), 2),
+        "throughput": throughput,
         "log":        log,
     }
 
 
-def _promediar(resultados):
-    n = len(resultados)
-    grupos = []
-    for g in range(N):
-        grupos.append({
-            "id":              g + 1,
-            "maquinas":        resultados[0]["grupos"][g]["maquinas"],
-            "utilizacion":     round(sum(r["grupos"][g]["utilizacion"]     for r in resultados) / n, 2),
-            "espera_promedio": round(sum(r["grupos"][g]["espera_promedio"] for r in resultados) / n, 2),
-            "cola_promedio":   round(sum(r["grupos"][g]["cola_promedio"]   for r in resultados) / n, 3),
-        })
-    return {
-        "throughput": round(sum(r["throughput"] for r in resultados) / n, 2),
-        "grupos":     grupos,
-    }
+
 
 
 def ejecutar(params):
@@ -376,7 +362,7 @@ def ejecutar(params):
         if grabar:
             log_primera = r["log"]
 
-    base = _promediar(replicas_base)
+    base = estadisticas.promediar_replicas(replicas_base)
 
     comparativa = []
     for gidx in range(N):
@@ -394,9 +380,8 @@ def ejecutar(params):
             if grabar:
                 log_alt = r_alt["log"]
 
-        alt    = _promediar(reps_alt)
-        mejora = ((alt["throughput"] - base["throughput"]) / base["throughput"] * 100
-                  if base["throughput"] > 0 else 0.0)
+        alt    = estadisticas.promediar_replicas(reps_alt)
+        mejora = estadisticas.calcular_mejora_pct(alt["throughput"], base["throughput"])
         comparativa.append({
             "grupo":         gidx + 1,
             "n_maquinas":    n_alt[gidx],        # cantidad de máquinas en ese grupo para el escenario

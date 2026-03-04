@@ -34,7 +34,6 @@ def verificador_parametros_generador(semilla, cantidad, modulo, multiplicador, i
       2. El módulo es de la forma 2^g  (g entero positivo).
       3. El multiplicador es de la forma 1 + 4k  (k entero positivo).
       4. El incremento es relativamente primo al módulo  (mcd = 1).
-
     """
 
     parametros = [
@@ -90,49 +89,30 @@ def verificador_parametros_generador(semilla, cantidad, modulo, multiplicador, i
 def generar_parametros_apartir_de_cantidad(cantidad):
     """
     Genera automáticamente parámetros válidos para el LCG dado solo la cantidad
-    de números que se quieren producir. Todos los parámetros cumplen las
-    condiciones del verificador (Hull-Dobell para módulo potencia de 2).
-
-    Estrategia:
-      - módulo    : mínima potencia de 2 estrictamente mayor que `cantidad`,
-                    para garantizar que el LCG pueda generar al menos esa cantidad
-                    sin repetir el ciclo antes de tiempo.
-      - semilla   : 0  (punto de partida neutro)
-      - multiplicador: 1 + 4 * k  con k elegido para que sea ≈ raíz cuadrada
-                       del módulo (buena distribución empírica).
-      - incremento: primer número impar >= 7 que sea coprimo con el módulo
-                    (como el módulo es potencia de 2, basta con que sea impar).
-
-    Args:
-        cantidad (int): cuántos números pseudoaleatorios se van a generar.
-
-    Returns:
-        dict con claves: semilla, cantidad, modulo, multiplicador, incremento
-                         y una descripción legible de cada valor.
+    de números que se quieren producir.
     """
     if not isinstance(cantidad, int) or cantidad <= 0:
         raise ValueError("La cantidad debe ser un entero positivo.")
 
-    # ── Módulo: mínima potencia de 2 > cantidad ───────────────────────────────
+    # Módulo: mínima potencia de 2 > cantidad 
     g = 1
     modulo = 2
     while modulo <= cantidad:
         g += 1
         modulo = 2 ** g
 
-    # ── Multiplicador: 1 + 4k con k ≈ sqrt(modulo)/4 (mínimo k=1 → a=5) ──────
+    # Multiplicador: 1 + 4k con k ≈ sqrt(modulo)/4 (mínimo k=1 → a=5)
     import math
     k = max(1, round(math.sqrt(modulo) / 4))
     multiplicador = 1 + 4 * k
-    # Asegurar que sea < módulo
     while multiplicador >= modulo:
         k -= 1
         multiplicador = 1 + 4 * k
     if k < 1:
-        multiplicador = 5   # fallback mínimo válido
+        multiplicador = 5   
 
-    # ── Incremento: primer impar >= 7 (siempre coprimo con potencia de 2) ──────
-    incremento = 7   # clásico en la literatura; impar ⟹ mcd(c, 2^g) = 1
+    # Incremento: primer impar >= 7 (siempre coprimo con potencia de 2)
+    incremento = 7   
 
     semilla = 0
 
@@ -142,7 +122,6 @@ def generar_parametros_apartir_de_cantidad(cantidad):
         "modulo":         modulo,
         "multiplicador":  multiplicador,
         "incremento":     incremento,
-        # Descripción legible
         "_info": {
             "modulo":        f"2^{g} = {modulo}  (> {cantidad})",
             "multiplicador": f"1 + 4×{k} = {multiplicador}",

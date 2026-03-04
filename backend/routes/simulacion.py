@@ -38,7 +38,7 @@ class ParametrosGenerador(BaseModel):
     incremento: int
 
 
-# ── Simulación ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/simular", response_model=ResultadoSimulacion)
 def simular(params: ParametrosSimulacion):
@@ -46,14 +46,9 @@ def simular(params: ParametrosSimulacion):
     return resultado
 
 
-# ── Generador LCG ──────────────────────────────────────────────────────────────
 
 @router.post("/generar")
 def generar(params: ParametrosGenerador):
-    """
-    Genera una secuencia de números pseudoaleatorios con el LCG.
-    Devuelve los valores crudos [0, modulo) y normalizados [0, 1).
-    """
     numeros = generadorNumeros.generar_numeros_congurencia_lineal(
         params.semilla,
         params.cantidad,
@@ -71,10 +66,7 @@ def generar(params: ParametrosGenerador):
 
 @router.post("/verificar-parametros")
 def verificar_parametros(params: ParametrosGenerador):
-    """
-    Verifica si los parámetros del LCG cumplen las condiciones de Hull-Dobell.
-    Retorna confirmación o lanza un error 422 con descripción del problema.
-    """
+
     resultado = generadorNumeros.verificador_parametros_generador(
         params.semilla,
         params.cantidad,
@@ -87,15 +79,8 @@ def verificar_parametros(params: ParametrosGenerador):
 
 @router.get("/generar-parametros/{cantidad}")
 def generar_parametros(cantidad: int):
-    """
-    Dado solo la cantidad de números deseados, calcula y devuelve
-    parámetros LCG válidos automáticamente.
-    """
     return generadorNumeros.generar_parametros_apartir_de_cantidad(cantidad)
 
 @router.get("/semilla-aleatoria")
 def semilla_aleatoria():
-    """
-    Genera una semilla aleatoria apropiada para usar en el generador.
-    """
     return {"semilla": random.randint(1, 99999)}
