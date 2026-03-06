@@ -4,27 +4,27 @@ MANUFACTURA = {
         "tiempos": [0.5, 0.8, 0.8],
         "probabilidad": 0.3,
         "lim_inferior": 0.0,
-        "lim_superior": 0.3
+        "lim_superior": 0.1
     },
     "tipo_2": {
         "secuencia": [4, 1, 3],
         "tiempos": [1.1, 0.8, 0.75],
         "probabilidad": 0.4,
-        "lim_inferior": 0.3,
-        "lim_superior": 0.7
+        "lim_inferior": 0.1,
+        "lim_superior": 0.3
     },
     "tipo_3": {
         "secuencia": [2, 5, 1, 4, 3],
-        "tiempos": [1.9, 0.25, 0.7, 0.9, 1.0],
+        "tiempos": [1.9, 2.4, 0.7, 0.9, 1.0],
         "probabilidad": 0.1,
-        "lim_inferior": 0.7,
-        "lim_superior": 0.8
+        "lim_inferior": 0.3,
+        "lim_superior": 0.6
     },
     "tipo_4": {
         "secuencia": [1, 5, 4],
-        "tiempos": [1.4, 1.8, 0.4],
+        "tiempos": [1.4, 6, 0.4],
         "probabilidad": 0.2,
-        "lim_inferior": 0.8,
+        "lim_inferior": 0.6,
         "lim_superior": 1.0
     }
 }

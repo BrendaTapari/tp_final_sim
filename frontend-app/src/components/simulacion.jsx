@@ -1,15 +1,15 @@
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import * as api from '../api/simulacion'
 import { CalendarClock, ChartColumn, Clock, Dices, Forklift, RotateCw, Play, Star, Boxes, Blocks } from 'lucide-react'
 
 // ── Colores por evento
 const BADGE_EVENTO = {
-  'Llegada':           'badge-primary',
-  'Inicio Servicio':   'badge-success',
-  'Espera en Cola':    'badge-warning',
-  'Sale de Cola':      'badge-info',
-  'Fin Servicio':      'badge-ghost',
-  'Completado':        'badge-accent',
+  'Llegada': 'badge-primary',
+  'Inicio Servicio': 'badge-success',
+  'Espera en Cola': 'badge-warning',
+  'Sale de Cola': 'badge-info',
+  'Fin Servicio': 'badge-ghost',
+  'Completado': 'badge-accent',
   'Inicio Simulación': 'badge-neutral',
 }
 
@@ -23,6 +23,16 @@ const GRUPOS_BASE = [
 
 const ESTADO = { IDLE: 'idle', CORRIENDO: 'corriendo', LISTO: 'listo', ERROR: 'error' }
 
+const TIPO_COLORS = [
+  'badge-primary', 'badge-secondary', 'badge-accent',
+  'badge-info', 'badge-warning', 'badge-error', 'badge-success',
+]
+function badgeTipo(tipo) {
+  if (!tipo) return <span className="opacity-20 text-xs">—</span>
+  const idx = (tipo.charCodeAt(tipo.length - 1) ?? 0) % TIPO_COLORS.length
+  return <span className={`badge badge-xs whitespace-nowrap ${TIPO_COLORS[idx]}`}>{tipo}</span>
+}
+
 function badgeUtil(pct) {
   if (pct >= 90) return 'badge-error'
   if (pct >= 75) return 'badge-warning'
@@ -32,11 +42,11 @@ function badgeUtil(pct) {
 // ── Componente principal
 export default function Simulacion() {
   const [params, setParams] = useState({ replicaciones: 10, tiempoSim: 480, semilla: 42 })
-  const [estado, setEstado]       = useState(ESTADO.IDLE)
+  const [estado, setEstado] = useState(ESTADO.IDLE)
   const [resultado, setResultado] = useState(null)
-  const [error, setError]         = useState(null)
-  const [vista, setVista]         = useState('eventos')
-  const [escenario, setEscenario] = useState('base') 
+  const [error, setError] = useState(null)
+  const [vista, setVista] = useState('eventos')
+  const [escenario, setEscenario] = useState('base')
 
   const handleChange = (e) =>
     setParams({ ...params, [e.target.name]: Number(e.target.value) })
@@ -49,19 +59,19 @@ export default function Simulacion() {
     if (resultado !== null) setParams(p => ({ ...p, semilla: p.semilla + 1 }))
     try {
       const data = await api.simular({
-        replicaciones:     params.replicaciones,
+        replicaciones: params.replicaciones,
         tiempo_simulacion: params.tiempoSim,
-        semilla:           semillaEfectiva,
+        semilla: semillaEfectiva,
       })
       setResultado({
-        throughput:  data.throughput,
+        throughput: data.throughput,
         tiempoTotal: data.tiempo_total,
-        grupos:      data.grupos.map(g => ({
+        grupos: data.grupos.map(g => ({
           id: g.id, maquinas: g.maquinas,
           utilizacion: g.utilizacion, espera: g.espera_promedio, colaPromedio: g.cola_promedio,
         })),
         comparativa: data.comparativa,
-        logEventos:  data.log_eventos ?? [],
+        logEventos: data.log_eventos ?? [],
       })
       setEstado(ESTADO.LISTO)
     } catch (err) {
@@ -146,7 +156,7 @@ export default function Simulacion() {
               onClick={handleSimular} disabled={estado === ESTADO.CORRIENDO}>
               {estado === ESTADO.CORRIENDO ? 'Simulando…'
                 : estado === ESTADO.LISTO ? <><RotateCw className="w-4 h-4 mr-1" /> Simular de nuevo</>
-                : <><Play className="w-4 h-4 mr-1" /> Ejecutar</>}
+                  : <><Play className="w-4 h-4 mr-1" /> Ejecutar</>}
             </button>
             {estado === ESTADO.LISTO && (
               <button className="btn btn-ghost btn-sm" onClick={handleReset}>✕</button>
@@ -180,9 +190,8 @@ export default function Simulacion() {
 
                 {/* Base */}
                 <button
-                  className={`btn btn-xs ${
-                    escenario === 'base' ? 'btn-primary' : 'btn-ghost'
-                  }`}
+                  className={`btn btn-xs ${escenario === 'base' ? 'btn-primary' : 'btn-ghost'
+                    }`}
                   onClick={() => setEscenario('base')}>
                   Base
                   <span className="ml-1 font-mono opacity-70">{resultado.throughput} t/h</span>
@@ -191,15 +200,13 @@ export default function Simulacion() {
                 {/* +1 en cada grupo */}
                 {resultado.comparativa.map(c => (
                   <button key={c.grupo}
-                    className={`btn btn-xs ${
-                      escenario === `g${c.grupo}` ? 'btn-secondary' : 'btn-ghost'
-                    }`}
+                    className={`btn btn-xs ${escenario === `g${c.grupo}` ? 'btn-secondary' : 'btn-ghost'
+                      }`}
                     onClick={() => setEscenario(`g${c.grupo}`)}>
                     +1 G{c.grupo}
-                    <span className={`ml-1 font-mono text-xs ${
-                      c.mejora_pct > 5 ? 'text-success' :
+                    <span className={`ml-1 font-mono text-xs ${c.mejora_pct > 5 ? 'text-success' :
                       c.mejora_pct > 0 ? 'text-info' : 'text-error'
-                    }`}>
+                      }`}>
                       {c.mejora_pct > 0 ? '+' : ''}{c.mejora_pct}%
                     </span>
                   </button>
@@ -238,7 +245,7 @@ export default function Simulacion() {
         {estado === ESTADO.LISTO && resultado && vista === 'eventos' && (() => {
           // Determinar qué log y qué grupos mostrar según el escenario seleccionado
           const comp = resultado.comparativa.find(c => `g${c.grupo}` === escenario)
-          const logActivo   = comp ? (comp.log_eventos ?? []) : resultado.logEventos
+          const logActivo = comp ? (comp.log_eventos ?? []) : resultado.logEventos
           const gruposActivos = comp ? (comp.grupos ?? resultado.grupos) : resultado.grupos
           const throughputActivo = comp ? comp.throughput : resultado.throughput
           const labelActivo = comp ? `+1 máquina en G${comp.grupo}` : 'Base'
@@ -272,7 +279,7 @@ function badgeTrabajo(estado) {
   if (estado === 'Completado')
     return <span className="badge badge-accent badge-xs whitespace-nowrap">✓ Completado</span>
   if (estado === 'Esperando atención')
-    return <span className="badge badge-warning badge-xs whitespace-nowrap">⏳ Esperando</span>
+    return <span className="badge badge-warning badge-xs whitespace-nowrap">En cola</span>
   // En grupo N
   return <span className="badge badge-success badge-xs whitespace-nowrap">{estado}</span>
 }
@@ -327,12 +334,12 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
 
   const filas = filtro
     ? eventos.filter(e =>
-        (e.evento ?? '').toLowerCase().includes(filtro.toLowerCase()) ||
-        String(e.trabajo_id ?? '').includes(filtro) ||
-        String(e.grupo ?? '').includes(filtro) ||
-        (e.tipo_manufactura ?? '').toLowerCase().includes(filtro.toLowerCase()) ||
-        (e.descripcion ?? '').toLowerCase().includes(filtro.toLowerCase())
-      )
+      (e.evento ?? '').toLowerCase().includes(filtro.toLowerCase()) ||
+      String(e.trabajo_id ?? '').includes(filtro) ||
+      String(e.grupo ?? '').includes(filtro) ||
+      (e.tipo_manufactura ?? '').toLowerCase().includes(filtro.toLowerCase()) ||
+      (e.descripcion ?? '').toLowerCase().includes(filtro.toLowerCase())
+    )
     : eventos
 
   const getGrupoSnap = (ev) => {
@@ -364,9 +371,8 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
                 const esExtra = g.id === grupoExtra
                 return (
                   <div key={g.id}
-                    className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg border ${
-                      esExtra ? 'border-secondary bg-secondary/10' : 'border-base-300 bg-base-200'
-                    }`}>
+                    className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg border ${esExtra ? 'border-secondary bg-secondary/10' : 'border-base-300 bg-base-200'
+                      }`}>
                     <span className="font-bold">
                       G{g.id}{esExtra ? <span className="text-secondary ml-0.5">+1</span> : ''}
                     </span>
@@ -465,22 +471,35 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
               {/* ── Estado individual de máquinas por grupo */}
               {gruposConMaq.map(({ g, slots }) =>
                 Array.from({ length: slots }, (_, i) => (
-                  <th key={`estmaq-g${g}-m${i+1}`}
+                  <th key={`estmaq-g${g}-m${i + 1}`}
                     className="whitespace-nowrap text-center cursor-help text-info"
-                    title={`Estado de la máquina ${i+1} del Grupo ${g}`}>
-                    G{g}-M{i+1}
+                    title={`Estado de la máquina ${i + 1} del Grupo ${g}`}>
+                    G{g}-M{i + 1}
                   </th>
                 ))
               )}
 
-              {/* ── Estado de cada trabajo */}
+              {/* ── Estado y Tipo de cada trabajo */}
               {trabajoIds.map(tid => (
-                <th key={`tj${tid}`}
-                  className="whitespace-nowrap text-center cursor-help text-secondary"
-                  title={`Estado del Trabajo ${tid} en este instante`}>
-                  Trabajo {tid}
-                </th>
+                <Fragment key={tid}>
+                  <th
+                    className="whitespace-nowrap text-center cursor-help text-secondary"
+                    title={`Estado del Trabajo ${tid} en este instante`}>
+                    T#{tid} Estado
+                  </th>
+                  <th
+                    className="whitespace-nowrap text-center cursor-help text-accent"
+                    title={`Tipo de manufactura del Trabajo ${tid}`}>
+                    T#{tid} Tipo
+                  </th>
+                </Fragment>
               ))}
+
+              <th
+                className="whitespace-nowrap text-center cursor-help text-accent font-bold"
+                title="IDs de trabajos que completaron todos sus grupos hasta este momento">
+                ✓ Terminados
+              </th>
 
               <th>Paso</th>
               <th>Secuencia</th>
@@ -503,11 +522,12 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
               )}
               {trabajoIds.length > 0 && (
                 <th
-                  colSpan={trabajoIds.length}
+                  colSpan={trabajoIds.length * 2}
                   className="text-center border-l border-secondary text-secondary">
-                  ← Estado trabajos →
+                  ← Estado · Tipo por trabajo →
                 </th>
               )}
+              <th className="text-center border-l border-accent text-accent">Terminados</th>
               <th colSpan={3} />
             </tr>
           </thead>
@@ -518,9 +538,9 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
 
               const rowClass =
                 ev.evento?.includes('COMPLETADO') ? 'bg-accent/10' :
-                ev.evento?.includes('Llegada')    ? 'bg-primary/5' :
-                ev.evento?.includes('espera')     ? 'bg-warning/10' :
-                ev.evento?.includes('Inicio sim') ? 'bg-base-300/30' : ''
+                  ev.evento?.includes('Llegada') ? 'bg-primary/5' :
+                    ev.evento?.includes('espera') ? 'bg-warning/10' :
+                      ev.evento?.includes('Inicio sim') ? 'bg-base-300/30' : ''
 
               return (
                 <tr key={i} className={rowClass}>
@@ -576,8 +596,8 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
                       <td key={`maq${g}`} className="text-center">
                         {s != null
                           ? <span className={`badge badge-xs font-bold ${s.maq_libres === 0 ? 'badge-error' : 'badge-success'}`}>
-                              {s.maq_libres}
-                            </span>
+                            {s.maq_libres}
+                          </span>
                           : <span className="opacity-20 text-xs">—</span>}
                       </td>
                     )
@@ -589,8 +609,8 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
                       <td key={`cola${g}`} className="text-center">
                         {s != null
                           ? <span className={`badge badge-xs ${s.cola > 2 ? 'badge-error' : s.cola > 0 ? 'badge-warning' : 'badge-ghost'}`}>
-                              {s.cola}
-                            </span>
+                            {s.cola}
+                          </span>
                           : <span className="opacity-20 text-xs">—</span>}
                       </td>
                     )
@@ -602,10 +622,10 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
                       <td key={`fin${g}`} className="text-center">
                         {s != null && s.fin_servicio && s.fin_servicio.length > 0
                           ? <div className="flex flex-col gap-0.5 items-center">
-                              {s.fin_servicio.map((tf, idx) => (
-                                <span key={idx} className="badge badge-success badge-outline badge-xs font-mono">{tf}</span>
-                              ))}
-                            </div>
+                            {s.fin_servicio.map((tf, idx) => (
+                              <span key={idx} className="badge badge-success badge-outline badge-xs font-mono">{tf}</span>
+                            ))}
+                          </div>
                           : <span className="opacity-20 text-xs">—</span>}
                       </td>
                     )
@@ -616,19 +636,33 @@ function TablaEventos({ eventos, grupos = [], throughput, label = 'Base', grupoE
                     Array.from({ length: slots }, (_, i) => {
                       const estadoArr = ev.estado_maquinas?.[g]
                       return (
-                        <td key={`estmaq-g${g}-m${i+1}`} className="text-center whitespace-nowrap">
+                        <td key={`estmaq-g${g}-m${i + 1}`} className="text-center whitespace-nowrap">
                           {estadoArr ? badgeMaquina(estadoArr[i]) : <span className="opacity-20 text-xs">—</span>}
                         </td>
                       )
                     })
                   )}
 
-                  {/* ── Estado de cada trabajo */}
+                  {/* ── Estado y Tipo de cada trabajo */}
                   {trabajoIds.map(tid => (
-                    <td key={`tj${tid}`} className="text-center whitespace-nowrap">
-                      {badgeTrabajo(ev.estado_trabajos?.[tid])}
-                    </td>
+                    <Fragment key={tid}>
+                      <td className="text-center whitespace-nowrap">
+                        {badgeTrabajo(ev.estado_trabajos?.[tid])}
+                      </td>
+                      <td className="text-center whitespace-nowrap">
+                        {badgeTipo(ev.tipo_trabajos?.[tid])}
+                      </td>
+                    </Fragment>
                   ))}
+
+                  {/* ── Trabajos terminados acumulados */}
+                  <td className="text-center whitespace-nowrap">
+                    {ev.trabajos_terminados && ev.trabajos_terminados.length > 0
+                      ? <span className="badge badge-accent badge-sm font-bold font-mono">
+                        {ev.trabajos_terminados.length}
+                      </span>
+                      : <span className="opacity-20 text-xs">—</span>}
+                  </td>
 
                   <td className="font-mono text-xs text-center">
                     {ev.paso != null && ev.total_pasos != null
@@ -698,7 +732,7 @@ function VistaResumen({ resultado }) {
       {/* Tabla grupos */}
       <div className="card bg-base-100 shadow-md">
         <div className="card-body p-4">
-          <h2 className="card-title text-base mb-2">Sistema Base — Estadísticas por Grupo <Boxes  size={20} /></h2>
+          <h2 className="card-title text-base mb-2">Sistema Base — Estadísticas por Grupo <Boxes size={20} /></h2>
           <div className="overflow-x-auto">
             <table className="table table-zebra w-full text-sm">
               <thead>
@@ -734,7 +768,7 @@ function VistaResumen({ resultado }) {
       {/* Comparativa */}
       <div className="card bg-base-100 shadow-md">
         <div className="card-body p-4">
-          <h2 className="card-title text-base mb-1">Comparativa — ¿Dónde agregar la máquina? <Blocks  size={20} />  </h2>
+          <h2 className="card-title text-base mb-1">Comparativa — ¿Dónde agregar la máquina? <Blocks size={20} />  </h2>
           <div className="overflow-x-auto">
             <table className="table table-zebra w-full text-sm">
               <thead>

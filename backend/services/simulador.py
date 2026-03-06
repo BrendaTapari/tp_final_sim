@@ -1,7 +1,7 @@
 
 import heapq
-from services import generadorNumeros, distribuciones, probabilidades, estadisticas
-from services.estados import EstadoTrabajo, EstadoMaquina
+from Services import generadorNumeros, distribuciones, probabilidades, estadisticas
+from Services.estados import EstadoTrabajo, EstadoMaquina
 
 GRUPOS = [
     {"id": 1, "maquinas": 3},
@@ -48,8 +48,10 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
     area_cola   = [0.0] * N
     t_ultimo_ev = [0.0] * N
     completados = [0]
+    terminados   = []
 
     estado_trabajos = {}
+    tipo_trabajos   = {}
 
     estado_maquinas = {
         g: [EstadoMaquina.LIBRE] * n_maquinas[g]
@@ -99,7 +101,8 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
              trabajo_id=None, grupo=None,
              tipo_manufactura=None, paso=None, total_pasos=None,
              secuencia=None,
-             prox_llegada_rnd=None, prox_llegada_t_calc=None, prox_llegada_reloj=None):
+             prox_llegada_rnd=None, prox_llegada_t_calc=None, prox_llegada_reloj=None,
+             trabajos_terminados=None):
 
         if registrar_log:
             log.append({
@@ -116,19 +119,17 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                 "paso":             paso,
                 "total_pasos":      total_pasos,
                 "secuencia":        secuencia,
-                # Próxima llegada programada
                 "prox_llegada_rnd":    round(prox_llegada_rnd,    6) if prox_llegada_rnd    is not None else None,
                 "prox_llegada_t_calc": round(prox_llegada_t_calc, 4) if prox_llegada_t_calc is not None else None,
                 "prox_llegada_reloj":  round(prox_llegada_reloj,  4) if prox_llegada_reloj  is not None else None,
-                # Estado de todos los grupos en este momento
                 "estado_grupos":    snapshot_grupos(),
-                # Estado por trabajo: {id → 'En grupo N' | 'Esperando atención' | 'Completado'}
                 "estado_trabajos":  dict(estado_trabajos),
-                # Estado por máquina individual: {g_idx+1 → ['Libre','Ocupada',...]}
                 "estado_maquinas":  {
                     g + 1: list(estado_maquinas[g])
                     for g in range(N)
                 },
+                "trabajos_terminados": list(terminados),
+                "tipo_trabajos":       dict(tipo_trabajos),
             })
 
     def _intentar_asignar(g, trabajo, t):
@@ -199,6 +200,7 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
             t_entre = round(t_sig - t, 4)
             sec_str = "→G".join(str(s) for s in tipo_mfg["secuencia"])
             trabajo = {"tipo": tipo_mfg, "paso": 0, "t_llegada": t, "id": tid, "tipo_nombre": tipo_nombre}
+            tipo_trabajos[tid] = tipo_nombre
 
             res, r_serv, ts, t_pos = _intentar_asignar(g0, trabajo, t)
 
@@ -317,8 +319,8 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                 completados[0] += 1
                 dur_total = round(t - trabajo["t_llegada"], 2)
                 sec_list  = trabajo["tipo"]["secuencia"]
-                # El trabajo completó su ciclo
                 estado_trabajos[trabajo["id"]] = EstadoTrabajo.COMPLETADO
+                terminados.append(trabajo["id"])
                 _log(t,
                      evento=f"T#{trabajo['id']} COMPLETADO",
                      descripcion=(
@@ -330,7 +332,8 @@ def _simular_replica(n_maquinas, tiempo_sim_min, tasa_llegada_min, pool, registr
                      tipo_manufactura=trabajo.get("tipo_nombre"),
                      grupo=sec_list[-1],
                      total_pasos=len(sec_list),
-                     secuencia=sec_list)
+                     secuencia=sec_list,
+                     trabajos_terminados=terminados)
 
     grupos_stats = estadisticas.calcular_stats_grupos(
         n_maquinas, tiempo_sim_min,

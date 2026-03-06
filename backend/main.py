@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import simulacion
+from Routes import simulacion
 
 app = FastAPI(title="TP Simulación - Fábrica de Manufacturas", version="1.0.0")
 

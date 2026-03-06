@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Any
-from services import simulador
-from services import generadorNumeros
+from Services import simulador
+from Services import generadorNumeros
 import random
 
 router = APIRouter()
